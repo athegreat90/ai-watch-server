@@ -1,0 +1,12 @@
+.env
+config.local.json
+config.h
+.build/
+.backup/
+__pycache__/
+*.pyc
+*.bin
+*.elf
+*.log
+*.zip
+security-results/

@@ -1,0 +1,5 @@
+**
+!bridge/
+!bridge/server.py
+!bridge/healthcheck.py
+!Dockerfile

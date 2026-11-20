@@ -1,0 +1,29 @@
+services:
+  ai-monitor-server:
+    image: ${AI_WATCH_SERVER_IMAGE:?Set a tagged GHCR image}
+    cpus: 0.50
+    init: true
+    restart: unless-stopped
+    ports:
+      # On a remote Pi/server, the ESP32 and Windows hooks use this host's LAN IP.
+      # For Docker Desktop on the same PC, localhost also works for hooks.
+      - "${MONITOR_HOST_BIND:-127.0.0.1}:${MONITOR_HOST_PORT:-8765}:8765"
+    environment:
+      MONITOR_BIND: "0.0.0.0"
+    user: "${PUID:-1000}:${PGID:-1000}"
+    volumes:
+      - type: bind
+        source: ./bridge/config.local.json
+        target: /app/config.local.json
+        read_only: true
+        bind:
+          create_host_path: false
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m

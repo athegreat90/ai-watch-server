@@ -1,0 +1,51 @@
+name: Daily base image remediation
+on:
+  schedule:
+    - cron: '41 4 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency: daily-base-image
+jobs:
+  candidate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
+      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349
+        id: app
+        with:
+          app-id: ${{ vars.SECURITY_APP_ID }}
+          private-key: ${{ secrets.SECURITY_APP_PRIVATE_KEY }}
+      - id: scan
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: bash security/remediate.sh
+      - if: steps.scan.outputs.candidate == 'true'
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version-file: .python-version
+      - if: steps.scan.outputs.candidate == 'true'
+        run: python -m unittest discover -s tests -v && python security/check_version.py
+      - if: steps.scan.outputs.candidate == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          gh auth setup-git
+          branch=security/python-base
+          git config user.name 'AI Watch security bot'
+          git config user.email 'ai-watch-security@users.noreply.github.com'
+          git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch" || true
+          git switch -c "$branch"
+          git add Dockerfile .python-version
+          git commit -m 'Update Python container base'
+          git push --force-with-lease origin "$branch"
+          { printf 'Both image architectures passed smoke tests and vulnerability scans.\n\n'; git diff HEAD^ HEAD -- Dockerfile .python-version; } > /tmp/ai-watch-pr.md
+          if gh pr view "$branch" --json state --jq .state | grep -q '^OPEN$'; then
+            gh pr edit "$branch" --body-file /tmp/ai-watch-pr.md
+          else
+            gh pr create --head "$branch" --base main --title 'Update Python container base' --body-file /tmp/ai-watch-pr.md
+          fi
