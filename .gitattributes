@@ -2,3 +2,4 @@
 *.sh text eol=lf
 *.yml text eol=lf
 vendor/** whitespace=-trailing-space
+*.zsh text eol=lf

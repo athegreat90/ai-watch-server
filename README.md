@@ -9,3 +9,9 @@ GET /health is public. GET /api/status and GET /api/sessions require X-Monitor-K
 CI scans images and Python source. Daily remediation validates pinned Python image updates before opening a PR. Set repository variable SECURITY_APP_ID and secret SECURITY_APP_PRIVATE_KEY using a GitHub App installed on this repository with Contents, Pull requests and Issues write permissions. Require passing checks and human review on main. Review findings without a patch in the daily tracking issue.
 
 Related repositories: [hooks](https://github.com/athegreat90/ai-watch-hooks) [firmware](https://github.com/athegreat90/ai-watch-firmware)
+
+## Zsh on Linux and macOS
+
+Run `zsh scripts/deploy-server.zsh` to build, start, and check the server.
+Run `zsh scripts/status.zsh` to check container and API health.
+Set `AI_WATCH_PYTHON` to an interpreter path if needed.
