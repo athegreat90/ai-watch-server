@@ -48,7 +48,7 @@ jobs:
           persist-credentials: false
       - id: changes
         env:
-          BEFORE_SHA: ${ github.event.before }
+          BEFORE_SHA: ${{ github.event.before }}
         run: python3 release/automatic.py eligibility
       - name: Mark qualifying changes
         if: steps.changes.outputs.qualifies == 'true'
