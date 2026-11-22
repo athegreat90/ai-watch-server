@@ -15,7 +15,10 @@ CONFIG = ROOT / "config.local.json"
 MAX_EVENTS = 40
 DONE_TTL = 120
 ACTIVE_TTL = 3600
+LIMITS_TTL = 900
+LONG_TASK_SECONDS = 300
 STATE: dict[tuple[str, str], dict] = {}
+LIMITS: dict[str, dict] = {}
 LOCK = threading.Lock()
 
 
@@ -60,11 +63,42 @@ def post_event(event: dict) -> None:
         previous = STATE.get(key)
         if previous and previous["updated"] >= timestamp:
             return
-        record["started"] = previous["started"] if previous else timestamp
+        # "started" is per turn: a new turn begins when work resumes from a non-working state.
+        new_turn = not previous or (status == "working" and previous["status"] not in ("working", "needs_attention"))
+        record["started"] = timestamp if new_turn else previous["started"]
+        record["since"] = previous["since"] if previous and previous["status"] == status else timestamp
         STATE[key] = record
         if len(STATE) > MAX_EVENTS:
             oldest = min(STATE, key=lambda key: STATE[key]["updated"])
             del STATE[oldest]
+
+
+def post_limits(data: dict) -> None:
+    agent = data.get("agent")
+    if agent not in ("Claude Code", "Codex", "Antigravity"):
+        raise ValueError("invalid agent")
+    record = {"updated": time.time()}
+    for window in ("five_hour", "weekly"):
+        item = data.get(window)
+        if not isinstance(item, dict):
+            raise ValueError("invalid window")
+        used, resets = item.get("used_pct"), item.get("resets_at")
+        if type(used) not in (int, float) or not 0 <= used <= 100:
+            raise ValueError("invalid percentage")
+        if type(resets) not in (int, float) or resets < 0:
+            raise ValueError("invalid reset time")
+        record[window] = {"used_pct": round(used, 1), "resets_at": resets}
+    with LOCK:
+        LIMITS[agent] = record
+
+
+def limits_snapshot(now: float) -> dict:
+    # Caller holds LOCK. Stale readings are dropped so the watch never shows old numbers.
+    for agent in [a for a, r in LIMITS.items() if now - r["updated"] > LIMITS_TTL]:
+        del LIMITS[agent]
+    # The watch has no wall clock, so each window also carries seconds until reset.
+    return {a: {w: {**r[w], "resets_in": max(0, int(r[w]["resets_at"] - now))} for w in ("five_hour", "weekly")}
+            for a, r in LIMITS.items()}
 
 
 def snapshot(limit=8) -> dict:
@@ -75,10 +109,14 @@ def snapshot(limit=8) -> dict:
             if now - record["updated"] > ttl:
                 del STATE[key]
         all_sessions = list(STATE.values())
+        limits = limits_snapshot(now)
     priority = {"needs_attention": 0, "error": 1, "working": 2, "notice": 3, "done": 4, "idle": 5}
     sessions = sorted(all_sessions, key=lambda s: (priority[s["status"]], -s["updated"]))[:limit]
     return {
-        "sessions": [{**s, "duration": max(0, int((now if s["status"] in ("working", "needs_attention") else s["updated"]) - s["started"]))} for s in sessions],
+        "sessions": [{**s, "duration": (d := max(0, int((now if s["status"] in ("working", "needs_attention") else s["updated"]) - s["started"]))),
+                      "finished_long": s["status"] == "done" and d >= LONG_TASK_SECONDS,
+                      "waiting": max(0, int(now - s["since"])) if s["status"] == "needs_attention" else 0} for s in sessions],
+        "limits": limits,
         "active_count": sum(s["status"] == "working" for s in all_sessions),
         "attention_count": sum(s["status"] == "needs_attention" for s in all_sessions),
         "total_count": len(all_sessions),
@@ -119,7 +157,7 @@ def make_handler(token: str):
         def do_POST(self):
             if not self._authorized():
                 return self._send(401, {"error": "unauthorized"})
-            if self.path not in ("/api/event", "/api/events"):
+            if self.path not in ("/api/event", "/api/events", "/api/limits"):
                 return self._send(404, {"error": "not found"})
             try:
                 length = int(self.headers.get("Content-Length", "0"))
@@ -128,7 +166,7 @@ def make_handler(token: str):
                 data = json.loads(self.rfile.read(length))
                 if not isinstance(data, dict):
                     raise ValueError("object expected")
-                post_event(data)
+                (post_limits if self.path == "/api/limits" else post_event)(data)
             except (ValueError, RecursionError, TimeoutError):
                 return self._send(400, {"error": "invalid event"})
             return self._send(200, {"ok": True})
