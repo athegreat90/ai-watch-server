@@ -122,3 +122,26 @@ See `bench/README.md`. In short: build the Linux programs, then run `bench/run-c
 | `bench/run-compare.sh` | Runs both servers and creates the comparison |
 | `bench/results/20261123-143422-compare-all.md` | Full comparison, unpinned |
 | `bench/results/20261123-143837-compare-1core.md` | Full comparison, one core |
+
+## Update: production Go server, all three under the production container limits
+
+Run with `bash bench/run-docker.sh 3 4s` (see `results/20261123-194127-docker-compare.md` and the raw per-run JSON next to it). Every server ran in a Linux container with the production limits (`--cpus 0.5 --memory 128m`, read-only, all capabilities dropped); the load generator ran in a separate container; the parity table passed on every server before every run; values are the median of 3 runs. Python 3.15.2, Go 1.27.4, Docker Desktop (16 CPUs) on Windows 11.
+
+| scenario / clients | python rps | experimental Go rps | production Go rps | python p99 ms | production Go p99 ms |
+|---|---|---|---|---|---|
+| status / 1 | 1142 | 1968 | 2210 | 1.7 | 1.0 |
+| status / 8 | 819 | 2165 | 4536 | 64.4 | 64.3 |
+| status / 32 | 839 | 1762 | 5131 | 80.2 | 71.8 |
+| events / 32 | 910 | 2650 | 5777 | 80.3 | 64.9 |
+| mixed / 32 | 656 | 2347 | 5478 | 89.3 | 66.2 |
+
+| server | idle memory | peak memory under load | image |
+|---|---|---|---|
+| python | 17.0 MiB | 19.5 MiB | 189 MB |
+| production Go | 3.9 MiB | 10.9 MiB | 17.1 MB (distroless static) |
+
+Observations and limits:
+- Production Go reached 2.2k-5.8k req/s against 0.7k-1.3k for Python at the same CPU limit, with 0 errors on all three servers. It also beat the earlier experimental port, mostly because of the connection-cap listener and the lighter JSON path.
+- The p99 of about 60-90 ms at 8+ clients is the CFS quota (0.5 CPU) throttling every server, not request cost; compare p50 (0.6-2.2 ms Go vs 3.9-28 ms Python).
+- A single shared host runs the load generator and Docker's VM, so treat ratios as indicative. Startup (about 1.1-1.3 s) is dominated by container creation, not the server. The CPU column in the generated file is `docker stats` sampling and is noisy; it is not a precise efficiency measure.
+- Python was already fast enough for the real workload (a watch and a few agents); the migration's wins that matter in production are the 17 MB image without a Python runtime or shell, the lower memory, and the standalone deployment.
