@@ -10,15 +10,50 @@ on:
 permissions:
   contents: read
 jobs:
-  native:
+  go:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
-          python-version-file: .python-version
-      - run: python -m unittest discover -s tests -v
-      - run: python security/check_version.py
+          go-version-file: go.mod
+      - name: Formatting
+        run: test -z "$(gofmt -l cmd internal)" || { gofmt -l cmd internal; exit 1; }
+      - run: go vet ./...
+      - name: Tests with the race detector and coverage
+        run: go test -race -count=1 -covermode=atomic -coverprofile=coverage.out ./...
+      - name: Coverage summary
+        run: go tool cover -func=coverage.out | tail -n 1 | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 7
+      - name: Release tooling tests
+        run: python3 -m unittest discover -s release -p 'test_*.py' -v
+      - name: Toolchain pins agree
+        run: python3 security/check_version.py
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+      - name: Known vulnerabilities in the standard library and dependencies
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
+      - name: Security static analysis
+        run: go run github.com/securego/gosec/v2/cmd/gosec@v2.30.0 -severity medium -confidence medium ./cmd/... ./internal/...
+  legacy-parity:
+    # The original Python server stays the compatibility reference: both servers must pass the same suite.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+      - run: python3 -m unittest discover -s tests -v
+      - run: bash bench/parity.sh
   images:
     runs-on: ubuntu-24.04
     strategy:
@@ -28,15 +63,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1
       - run: bash security/check-image.sh ${{ matrix.arch }}
-  source:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
-        with:
-          python-version-file: .python-version
-      - run: python -m pip install bandit==1.9.4
-      - run: bandit -r bridge -lll
 
   release-eligibility:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

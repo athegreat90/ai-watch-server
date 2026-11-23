@@ -1,46 +1,53 @@
 name: Publish image
+# Manual path for releases created in the GitHub UI or with a personal token. It runs the very same
+# publication script as the automatic release (immutable version tag, `latest` only for the newest
+# stable version, same index digest) and requires CI to have succeeded on main for the tagged
+# commit, so an unvalidated commit never gets a version tag or `latest`. Rerunning is safe.
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag, for example v1.2.0
+        required: true
 permissions:
   contents: read
+concurrency:
+  group: publish-release
+  queue: max
 jobs:
-  native:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
-        with:
-          python-version-file: .python-version
-      - run: python -m unittest discover -s tests -v
-      - run: python security/check_version.py
   publish:
-    needs: [native, source]
     runs-on: ubuntu-24.04
     permissions:
-      contents: read
+      contents: write
+      actions: read
       packages: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1
-      - run: |
-          bash security/check-image.sh amd64
-          bash security/check-image.sh arm64
-      - name: Publish versioned image
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]] || exit 1
-          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker buildx create --use
-          docker buildx build --platform linux/amd64,linux/arm64 --tag "ghcr.io/${GITHUB_REPOSITORY,,}:$RELEASE_TAG" --push .
-  source:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
-          python-version-file: .python-version
-      - run: python -m pip install bandit==1.9.4
-      - run: bandit -r bridge -lll
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate the tag and require a green CI run for its commit
+        id: tested
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]] || { echo "Unexpected tag $RELEASE_TAG"; exit 1; }
+          sha=$(git rev-parse HEAD)
+          bash release/require-ci.sh "$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1
+      - name: Publish the version tag and, when eligible, latest
+        env:
+          TESTED_SHA: ${{ steps.tested.outputs.sha }}
+        run: bash release/push-image.sh
+      - name: Attach release assets that are missing
+        run: |
+          bash release/assets.sh
+          python3 release/automatic.py publish
