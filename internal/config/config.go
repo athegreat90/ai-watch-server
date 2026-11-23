@@ -42,7 +42,7 @@ type file struct {
 
 // Load reads and validates the configuration at path. The error never contains the token.
 func Load(path string) (Config, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- the path is chosen by the operator on the command line, never by a remote caller
 	if err != nil {
 		return Config{}, fmt.Errorf("missing %s: run \"ai-watch-server init-config\"", path)
 	}
@@ -66,7 +66,7 @@ func Load(path string) (Config, error) {
 // Port returns the configured port, or [DefaultPort] when the file is missing or unreadable.
 // It ignores the token so health checks work with any readable file.
 func Port(path string) int {
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- the path is chosen by the operator on the command line, never by a remote caller
 	if err != nil {
 		return DefaultPort
 	}
@@ -99,7 +99,7 @@ func Init(path string) (created bool, err error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return false, err
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) // #nosec G304 -- the path is chosen by the operator on the command line, never by a remote caller
 	if errors.Is(err, fs.ErrExist) {
 		return false, nil
 	}

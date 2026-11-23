@@ -56,7 +56,7 @@ func readCredentials(path string, getenv func(string) string) (credentials, erro
 		}
 		return credentials{token: token}, nil
 	}
-	raw, err := os.ReadFile(path)
+	raw, err := os.ReadFile(path) // #nosec G304 -- the path is chosen by the operator on the command line, never by a remote caller
 	if err != nil {
 		return credentials{}, fmt.Errorf("cannot read token file %s", path)
 	}

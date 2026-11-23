@@ -5,7 +5,7 @@ baseline=$(mktemp)
 for arch in amd64 arm64; do
   bash security/check-image.sh "$arch" >>"$report" 2>&1 || true
   test -s "security-results/$arch.json" || { tail -n 30 "$report"; exit 1; }
-  python security/check_findings.py "security-results/$arch.json" >>"$baseline" || true
+  python3 security/check_findings.py "security-results/$arch.json" >>"$baseline" || true
 done
 if [ -s "$baseline" ]; then
   jq -Rs '{title:"Daily container vulnerability findings",body:.}' "$baseline" >"$report"
@@ -13,8 +13,8 @@ if [ -s "$baseline" ]; then
   if [ -n "$issue" ]; then gh issue edit "$issue" --body-file "$baseline"
   else gh issue create --title 'Daily container vulnerability findings' --body-file "$baseline"; fi
 fi
-python security/refresh_base.py
-git diff --quiet -- Dockerfile .python-version && exit 0
+python3 security/refresh_base.py
+git diff --quiet -- Dockerfile go.mod && exit 0
 mkdir -p security-results
 for arch in amd64 arm64; do
   if ! bash security/check-image.sh "$arch"; then
