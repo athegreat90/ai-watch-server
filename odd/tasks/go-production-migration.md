@@ -21,7 +21,7 @@ S8 Benchmarks Python vs experimental Go vs production Go, real numbers only.
 - [x] T6 release tooling (S5) inline
 - [x] T7 deploy bundle + installers (S6) inline
 - [ ] T8 Sonar + CI (S7) inline, BLOCKED on user setup confirmation before commit
-- [ ] T9 docs (all) inline
+- [x] T9 docs (all) inline
 
 ## Log
 L1 (2026-11-23, user): full request in the /plan command args (Go migration, standalone Docker deploy, standalone check_api, SonarQube like minecraft-modsync, dual tags vX.Y.Z + latest). Corrections: "add comments to each function ... according to the Go comment standard"; "step-by-step of the tailscale part when you need it before the commit".

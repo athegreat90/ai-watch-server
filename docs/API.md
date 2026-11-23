@@ -1,6 +1,6 @@
 # API reference
 
-All responses are JSON with `Cache-Control: no-store`. Every endpoint except `GET /health` requires the header `X-Monitor-Key: <token>` (the `token` in `bridge/config.local.json`). A wrong or missing key returns `401 {"error":"unauthorized"}`.
+All responses are JSON with `Cache-Control: no-store`. Every endpoint except `GET /health` requires the header `X-Monitor-Key: <token>` (the `token` in `config.local.json`). A wrong or missing key returns `401 {"error":"unauthorized"}`.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
@@ -90,6 +90,14 @@ Accepted `agent` values: `Claude Code` and `Codex`.
 | `working` and `needs_attention` sessions expire after | 3600 s |
 | Limits readings expire after | 900 s |
 | Long task threshold | 300 s |
-| Concurrent connections | 16 (extra ones are dropped) |
+| Concurrent connections | 16 (extra clients wait until a slot frees) |
 | Request timeout | 3 s |
 | Storage | Memory only; cleared on restart |
+
+## Compatibility notes (Go server)
+
+The Go server answers like the Python server of v1.1.0 for every request in the parity suite (`bench/parity.sh`). Differences that do not affect the watch, hooks or firmware:
+
+- Past 16 concurrent connections the server queues extra clients instead of accepting and closing them.
+- JSON is compact ASCII with `\uXXXX` escapes, as before; a number such as `1700000000.0` may be printed as `1700000000`.
+- A malformed `Content-Length` header is rejected by Go's HTTP stack with a plain `400` before the handler runs; unsupported methods answer `501`.
