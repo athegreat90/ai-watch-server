@@ -74,7 +74,13 @@ if [ ! -f compose.yaml ]; then
     # Installer run on its own (for example downloaded with curl): fetch and verify the bundle first.
     note "compose.yaml not found next to the installer; downloading the deployment bundle"
     if [ -n "$version" ] && [ "$version" != latest ]; then bundle_tag=$version
-    else bundle_tag=$(download "$release_api/releases/latest" /dev/stdout | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1); fi
+    else
+        # A temp file instead of /dev/stdout: curl cannot write to /dev/stdout under Git Bash on Windows.
+        latest_json=$(mktemp)
+        download "$release_api/releases/latest" "$latest_json" || { rm -f "$latest_json"; die "could not query the latest release; pass --version vX.Y.Z"; }
+        bundle_tag=$(sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' "$latest_json" | head -1)
+        rm -f "$latest_json"
+    fi
     [ -n "$bundle_tag" ] || die "could not determine the latest release; pass --version vX.Y.Z"
     zip=$(mktemp)
     fetch_verified "$bundle_tag" "ai-watch-deploy-$bundle_tag.zip" "$zip" || die "could not download the deployment bundle for $bundle_tag"
@@ -83,7 +89,12 @@ if [ ! -f compose.yaml ]; then
     cp -Rn "$extract"/ai-watch-deploy/. . && rm -rf "$zip" "$extract"
 fi
 
-[ -f .env ] || { [ -f .env.example ] && cp .env.example .env || : > .env; chmod 600 .env 2>/dev/null || true; }
+new_env=0
+if [ ! -f .env ]; then
+    new_env=1
+    if [ -f .env.example ]; then cp .env.example .env; else : > .env; fi
+    chmod 600 .env 2>/dev/null || true
+fi
 env_get() { sed -n "s/^$1=//p" .env | tail -1; }
 env_set() { # key value: replace an active line, else append
     local tmp; tmp=$(mktemp)
@@ -102,7 +113,8 @@ if [ -n "$rollback" ]; then
 elif [ -n "$version" ]; then
     env_set AI_WATCH_SERVER_IMAGE "$image_repo:$version"; explicit=1
 else
-    [ -n "$(env_get AI_WATCH_SERVER_IMAGE)" ] || env_set AI_WATCH_SERVER_IMAGE "$image_repo:latest"
+    # A fresh .env always follows --repo (the example file names the upstream image); an existing one is kept.
+    if [ "$new_env" = 1 ] || [ -z "$(env_get AI_WATCH_SERVER_IMAGE)" ]; then env_set AI_WATCH_SERVER_IMAGE "$image_repo:latest"; fi
     explicit=0
 fi
 [ -z "$bind" ] || { env_set MONITOR_HOST_BIND "$bind"; explicit=1; }
@@ -172,7 +184,7 @@ if [ "$check" = 1 ]; then
         "$checker" --url "http://$check_host:$host_port" --token-file config.local.json
     else
         note "Standalone checker not available for this release; using the one inside the image"
-        docker compose exec -T ai-watch-server /app/ai-watch-check-api --url http://127.0.0.1:8765 --token-file /app/config.local.json
+        MSYS_NO_PATHCONV=1 docker compose exec -T ai-watch-server /app/ai-watch-check-api --url http://127.0.0.1:8765 --token-file /app/config.local.json
     fi
 fi
 
