@@ -20,7 +20,7 @@ Code quality and security analysis for this repository, modeled on the setup of 
 1. **SonarQube project.** Create `athegreat90_ai-watch-server` (manually, "Other CI"). Generate a project analysis token. Never put it in a file or on a command line.
 2. **Quality Gate.** Create or assign a gate whose conditions apply to new code: bugs = 0, vulnerabilities = 0, code smells = 0, security hotspots reviewed = 100%, coverage >= 80%, duplicated lines <= 3%, reliability, security and maintainability ratings = A. A gate without conditions always passes and enforces nothing.
 3. **Tailscale ACL** (Admin console, Access controls). Add `"tagOwners": {"tag:ci": ["autogroup:admin"]}` and a grant `{"src": ["tag:ci"], "dst": ["<SonarQube tailnet IP>"], "ip": ["tcp:9000"]}`. An existing identical grant (for example from ModSync) is enough.
-4. **Tailscale trust credential** (Settings, Trust credentials, Credential, OpenID Connect). Issuer: GitHub. Subject: `repo:athegreat90/ai-watch-server:ref:refs/heads/main`. Scope: Auth Keys, Write. Tag: `tag:ci`. Create a new credential for this repository; the ModSync one is bound to another repository. Copy the Client ID and the Audience (neither is secret).
+4. **Tailscale trust credential** (Settings, Trust credentials, Credential, OpenID Connect). Issuer: GitHub. Subject: `repo:athegreat90@6455700/ai-watch-server@1465961918:ref:refs/heads/main`. This repository uses GitHub's immutable subject format (owner and repository IDs are part of the subject); the short form `repo:athegreat90/ai-watch-server:ref:refs/heads/main` is rejected with HTTP 403. Check the format with `gh api repos/athegreat90/ai-watch-server/actions/oidc/customization/sub`. Scope: Auth Keys, Write. Tag: `tag:ci`. Create a new credential for this repository; the ModSync one is bound to another repository. Copy the Client ID and the Audience (neither is secret).
 5. **GitHub secrets and variable** (repository `athegreat90/ai-watch-server`):
    ```sh
    gh secret set TS_OAUTH_CLIENT_ID -R athegreat90/ai-watch-server
@@ -44,6 +44,7 @@ SONAR_TOKEN=<token> sonar-scanner -Dsonar.host.url=https://sonarqube.alexandermo
 
 | Symptom | Likely cause |
 |---|---|
+| Tailscale step fails with `token exchange failed with status 403` | The credential subject does not match the OIDC token. Use the immutable subject from step 4. Then check the audience, the Client ID secret and that the credential allows `tag:ci` |
 | Tailscale step fails to authenticate | The credential subject must match the running ref exactly (`refs/heads/main`); `tag:ci` must exist in the ACL; the credential needs `auth_keys` write |
 | `curl` to `/api/system/status` times out | The ACL grant is missing or wrong, or the SonarQube node is offline |
 | Analysis passes but nothing is enforced | The assigned Quality Gate has no conditions (step 2) |
