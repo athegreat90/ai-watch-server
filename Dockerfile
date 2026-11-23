@@ -1,29 +1,32 @@
-# Runs only the Python monitoring API. AI CLI hooks stay on the developer's PC.
-# Standard-library Python: no pip installations or build tools required.
-FROM python:3.15.2-slim-bookworm@sha256:96599df822d0e1c6bb700014a05c7f3c8cabc6e0f7ff3c4f9f69cee033b4b5d9
+# syntax=docker/dockerfile:1
+# AI Watch Server: a static Go binary on a distroless base. No shell, package manager or Python.
+# Both base images are pinned by digest; security/refresh_base.py keeps them current.
 
-# The application uses only the standard library. Remove installer tooling and its vendored packages.
-RUN python -m pip uninstall --yes setuptools msgpack urllib3 pip \
-    && python -c "import shutil, sysconfig; from pathlib import Path; shutil.rmtree(Path(sysconfig.get_path('stdlib')) / 'ensurepip' / '_bundled', ignore_errors=True)" \
-    && python -c "import importlib.util; assert all(importlib.util.find_spec(name) is None for name in ('pip', 'setuptools', 'msgpack', 'urllib3'))"
+# The compiler always runs natively and cross-compiles, so arm64 images need no emulation to build.
+FROM --platform=$BUILDPLATFORM golang:1.27.4-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea AS build
+WORKDIR /src
+COPY go.mod ./
+COPY cmd ./cmd
+COPY internal ./internal
+ARG TARGETOS
+ARG TARGETARCH
+ARG VERSION=dev
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -trimpath -buildvcs=false -ldflags="-s -w -X main.version=${VERSION}" \
+    -o /out/ai-watch-server ./cmd/ai-watch-server
 
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:8ce6dd87e9823c5b48dcfb2c8604714ccb351ce59607327bcc4957448da279b5
 WORKDIR /app
+COPY --from=build /out/ai-watch-server /app/ai-watch-server
 
-RUN groupadd --system --gid 1000 aiwatch \
-    && useradd --system --uid 1000 --gid aiwatch \
-       --home-dir /nonexistent --no-create-home \
-       --shell /usr/sbin/nologin aiwatch
-
-COPY --chown=1000:1000 bridge/server.py bridge/healthcheck.py ./
-
+# UID 1000 matches the owner of the 0600 token file on a typical Linux/Raspberry Pi host, so the
+# file stays private and still readable. Override with --user (or PUID/PGID in compose) if needed.
 USER 1000:1000
 EXPOSE 8765
 
 HEALTHCHECK --interval=30s --timeout=4s --start-period=10s --retries=3 \
-    CMD ["python", "/app/healthcheck.py"]
+    CMD ["/app/ai-watch-server", "healthcheck"]
 
-CMD ["python", "/app/server.py"]
+# The config is mounted at /app/config.local.json (the working directory), the default path.
+ENTRYPOINT ["/app/ai-watch-server"]
+CMD ["serve"]

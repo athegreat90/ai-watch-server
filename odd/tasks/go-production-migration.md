@@ -13,10 +13,10 @@ S7 SonarQube (Tailscale OIDC) gates release; manual Tailscale/Sonar steps given 
 S8 Benchmarks Python vs experimental Go vs production Go, real numbers only.
 
 ## Tasks
-- [ ] T1 server core (S1,S2,S3) inline
-- [ ] T2 init-config + healthcheck (S6) inline
-- [ ] T3 check-api (S6) inline
-- [ ] T4 Dockerfile + compose (S4) inline
+- [x] T1 server core (S1,S2,S3) inline
+- [x] T2 init-config + healthcheck (S6) inline
+- [x] T3 check-api (S6) inline
+- [x] T4 Dockerfile + compose (S4) inline
 - [ ] T5 parity + bench (S8) inline
 - [ ] T6 release tooling (S5) inline
 - [ ] T7 deploy bundle + installers (S6) inline

@@ -1,5 +1,6 @@
 **
-!bridge/
-!bridge/server.py
-!bridge/healthcheck.py
-!Dockerfile
+!go.mod
+!go.sum
+!cmd/**
+!internal/**
+**/*_test.go
