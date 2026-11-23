@@ -2,6 +2,7 @@
 # Smoke test of a built image under the same restrictions as production: non-root, read-only
 # root filesystem, no capabilities, no-new-privileges, token file mounted read-only.
 set -euo pipefail
+export MSYS_NO_PATHCONV=1 # Git Bash on Windows must not rewrite container paths
 image=$1
 arch=$2
 token=example-fixture-token-only-000

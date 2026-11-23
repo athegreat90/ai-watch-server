@@ -19,7 +19,7 @@ S8 Benchmarks Python vs experimental Go vs production Go, real numbers only.
 - [x] T4 Dockerfile + compose (S4) inline
 - [x] T5 parity + bench (S8) inline
 - [x] T6 release tooling (S5) inline
-- [ ] T7 deploy bundle + installers (S6) inline
+- [x] T7 deploy bundle + installers (S6) inline
 - [ ] T8 Sonar + CI (S7) inline, BLOCKED on user setup confirmation before commit
 - [ ] T9 docs (all) inline
 

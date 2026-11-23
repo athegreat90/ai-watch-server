@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export MSYS_NO_PATHCONV=1 # Git Bash on Windows must not rewrite container paths
 arch=${1:?architecture required}
 mkdir -p security-results
 rm -f "security-results/$arch.json"

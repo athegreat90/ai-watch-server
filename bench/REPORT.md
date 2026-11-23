@@ -138,7 +138,7 @@ Run with `bash bench/run-docker.sh 3 4s` (see `results/20261123-194127-docker-co
 | server | idle memory | peak memory under load | image |
 |---|---|---|---|
 | python | 17.0 MiB | 19.5 MiB | 189 MB |
-| production Go | 3.9 MiB | 10.9 MiB | 17.1 MB (distroless static) |
+| production Go | 3.9 MiB | 10.9 MiB | 17.1 MB when measured (server only); 26.8 MB (amd64) / 25.2 MB (arm64) now that the image also carries the API checker |
 
 Observations and limits:
 - Production Go reached 2.2k-5.8k req/s against 0.7k-1.3k for Python at the same CPU limit, with 0 errors on all three servers. It also beat the earlier experimental port, mostly because of the connection-cap listener and the lighter JSON path.

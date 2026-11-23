@@ -131,3 +131,11 @@ func TestInitReportsUnwritableLocation(t *testing.T) {
 		t.Fatal("expected an error")
 	}
 }
+
+func TestLoadDistinguishesUnreadableFromMissing(t *testing.T) {
+	// Reading a directory fails with an error that is not "does not exist", like a permission problem.
+	_, err := Load(t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "cannot read") || strings.Contains(err.Error(), "init-config") {
+		t.Fatalf("err %v", err)
+	}
+}

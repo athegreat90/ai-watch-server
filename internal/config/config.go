@@ -43,8 +43,12 @@ type file struct {
 // Load reads and validates the configuration at path. The error never contains the token.
 func Load(path string) (Config, error) {
 	raw, err := os.ReadFile(path) // #nosec G304 -- the path is chosen by the operator on the command line, never by a remote caller
-	if err != nil {
+	if errors.Is(err, fs.ErrNotExist) {
 		return Config{}, fmt.Errorf("missing %s: run \"ai-watch-server init-config\"", path)
+	}
+	if err != nil {
+		// Typically a permission problem: the user running the server must be able to read the file.
+		return Config{}, fmt.Errorf("cannot read %s: %w", path, errors.Unwrap(err))
 	}
 	var f file
 	if err := json.Unmarshal(raw, &f); err != nil {
