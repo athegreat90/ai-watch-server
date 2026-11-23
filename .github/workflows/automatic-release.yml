@@ -1,4 +1,7 @@
 name: Automatic release
+# Runs only after CI succeeded on a push to main. CI includes the tests, race detector, security
+# scans, both image architectures and the SonarQube Quality Gate, so nothing below runs for a
+# commit that failed any required check.
 on:
   workflow_run:
     workflows: [CI]
@@ -7,6 +10,7 @@ on:
 permissions:
   contents: read
 concurrency:
+  # One publication at a time, in order, shared with the manual path (publish-image.yml).
   group: publish-release
   queue: max
 jobs:
@@ -34,11 +38,19 @@ jobs:
           CI_RUN_ID: ${{ github.event.workflow_run.id }}
         run: python3 release/automatic.py reserve
       - if: steps.version.outputs.tag != ''
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+      - if: steps.version.outputs.tag != ''
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1
       - if: steps.version.outputs.tag != ''
         run: |
           bash security/check-image.sh amd64
           bash security/check-image.sh arm64
+      - if: steps.version.outputs.tag != ''
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: bash release/assets.sh
       - if: steps.version.outputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}

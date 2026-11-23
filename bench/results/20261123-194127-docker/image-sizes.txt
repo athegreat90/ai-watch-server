@@ -1,0 +1,2 @@
+ai-watch-bench:prod 17.1MB
+python:3.15.2-slim-bookworm 189MB

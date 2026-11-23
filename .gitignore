@@ -10,3 +10,6 @@ __pycache__/
 *.log
 *.zip
 security-results/
+coverage.out
+*.exe
+/dist/

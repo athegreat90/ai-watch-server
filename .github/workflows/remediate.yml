@@ -25,27 +25,27 @@ jobs:
           GH_TOKEN: ${{ steps.app.outputs.token }}
         run: bash security/remediate.sh
       - if: steps.scan.outputs.candidate == 'true'
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
-          python-version-file: .python-version
+          go-version-file: go.mod
       - if: steps.scan.outputs.candidate == 'true'
-        run: python -m unittest discover -s tests -v && python security/check_version.py
+        run: go test ./... && python3 security/check_version.py
       - if: steps.scan.outputs.candidate == 'true'
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           gh auth setup-git
-          branch=security/python-base
+          branch=security/go-base
           git config user.name 'AI Watch security bot'
           git config user.email 'ai-watch-security@users.noreply.github.com'
           git fetch origin "refs/heads/$branch:refs/remotes/origin/$branch" || true
           git switch -c "$branch"
-          git add Dockerfile .python-version
-          git commit -m 'Update Python container base'
+          git add Dockerfile go.mod
+          git commit -m 'Update Go container base'
           git push --force-with-lease origin "$branch"
-          { printf 'Both image architectures passed smoke tests and vulnerability scans.\n\n'; git diff HEAD^ HEAD -- Dockerfile .python-version; } > /tmp/ai-watch-pr.md
+          { printf 'Both image architectures passed smoke tests and vulnerability scans.\n\n'; git diff HEAD^ HEAD -- Dockerfile go.mod; } > /tmp/ai-watch-pr.md
           if gh pr view "$branch" --json state --jq .state | grep -q '^OPEN$'; then
             gh pr edit "$branch" --body-file /tmp/ai-watch-pr.md
           else
-            gh pr create --head "$branch" --base main --title 'Update Python container base' --body-file /tmp/ai-watch-pr.md
+            gh pr create --head "$branch" --base main --title 'Update Go container base' --body-file /tmp/ai-watch-pr.md
           fi

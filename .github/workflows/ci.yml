@@ -10,15 +10,50 @@ on:
 permissions:
   contents: read
 jobs:
-  native:
+  go:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
-          python-version-file: .python-version
-      - run: python -m unittest discover -s tests -v
-      - run: python security/check_version.py
+          go-version-file: go.mod
+      - name: Formatting
+        run: test -z "$(gofmt -l cmd internal)" || { gofmt -l cmd internal; exit 1; }
+      - run: go vet ./...
+      - name: Tests with the race detector and coverage
+        run: go test -race -count=1 -covermode=atomic -coverprofile=coverage.out ./...
+      - name: Coverage summary
+        run: go tool cover -func=coverage.out | tail -n 1 | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage
+          path: coverage.out
+          retention-days: 7
+      - name: Release tooling tests
+        run: python3 -m unittest discover -s release -p 'test_*.py' -v
+      - name: Toolchain pins agree
+        run: python3 security/check_version.py
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+      - name: Known vulnerabilities in the standard library and dependencies
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
+      - name: Security static analysis
+        run: go run github.com/securego/gosec/v2/cmd/gosec@v2.30.0 -severity medium -confidence medium ./cmd/... ./internal/...
+  legacy-parity:
+    # The original Python server stays the compatibility reference: both servers must pass the same suite.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+      - run: python3 -m unittest discover -s tests -v
+      - run: bash bench/parity.sh
   images:
     runs-on: ubuntu-24.04
     strategy:
@@ -28,15 +63,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1
       - run: bash security/check-image.sh ${{ matrix.arch }}
-  source:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
-        with:
-          python-version-file: .python-version
-      - run: python -m pip install bandit==1.9.4
-      - run: bandit -r bridge -lll
 
   release-eligibility:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -53,3 +79,41 @@ jobs:
       - name: Mark qualifying changes
         if: steps.changes.outputs.qualifies == 'true'
         run: echo "Shipped files changed in this push."
+  sonar:
+    # SonarQube is reachable only inside the tailnet. The job joins it as an ephemeral, ACL-restricted
+    # tag:ci node using workload identity federation (no long-lived Tailscale secret). It never runs for
+    # pull requests (untrusted code must not obtain OIDC tokens or secrets), and the federated identity
+    # only trusts refs/heads/main of this repository. A failing Quality Gate fails this job, so CI fails
+    # and neither the version tag nor latest is published. Setup: docs/SONARQUBE.md.
+    if: github.event_name != 'pull_request'
+    needs: [go]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: coverage
+      - name: Require the SonarQube settings
+        run: test -n "$SONAR_HOST_URL" && test -n "$SONAR_TOKEN" || { echo "Set the SONAR_HOST_URL variable and SONAR_TOKEN secret (docs/SONARQUBE.md)."; exit 1; }
+      - uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TS_AUDIENCE }}
+          tags: tag:ci
+          args: --accept-dns=false
+      - name: Verify SonarQube is reachable over Tailscale
+        run: |
+          tailscale status
+          curl --fail --silent --show-error --max-time 20 "$SONAR_HOST_URL/api/system/status"
+      - uses: SonarSource/sonarqube-scan-action@70bad232163b09d998ea0707ee80c0ec80798c16 # v8.5.1
+        with:
+          args: -Dsonar.qualitygate.wait=true
