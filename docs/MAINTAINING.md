@@ -51,7 +51,7 @@ Release assets per version: `ai-watch-deploy-vX.Y.Z.zip`, `ai-watch-check-api_vX
 
 - Trivy (`HIGH,CRITICAL`, pinned by digest) scans both image architectures in CI and daily. Fixable findings fail the check; unfixed ones are tracked in the daily issue.
 - `govulncheck` and `gosec` run in CI. `#nosec G304` is used only where the path is an operator-chosen CLI option.
-- Daily remediation (`remediate.yml`) refreshes the digest-pinned `golang` and `distroless` base images (`security/refresh_base.py`), validates them with tests and both image checks, and opens a PR from `security/go-base`. It needs the repository variable `SECURITY_APP_ID` and the secret `SECURITY_APP_PRIVATE_KEY` (a GitHub App with Contents, Pull requests and Issues write access). Until they exist the daily run fails at the token step.
+- Daily remediation (`remediate.yml`) refreshes the digest-pinned `golang` and `distroless` base images (`security/refresh_base.py`), validates them with tests and both image checks, and opens a PR from `security/go-base`. It needs the repository variable `SECURITY_APP_CLIENT_ID` and the secret `SECURITY_APP_PRIVATE_KEY` (a GitHub App with Contents, Pull requests and Issues write access, installed on this repository). It authenticates by Client ID, so also set the variable `SECURITY_APP_CLIENT_ID` (shown in the App settings). Until they exist the daily run fails at the token step.
 - Require passing checks and human review on `main` (repository settings; not enforced from code).
 
 ## Benchmarks and parity

@@ -3,7 +3,7 @@
 # Both base images are pinned by digest; security/refresh_base.py keeps them current.
 
 # The compiler always runs natively and cross-compiles, so arm64 images need no emulation to build.
-FROM --platform=$BUILDPLATFORM golang:1.27.4-bookworm@sha256:b754301872c53d3dff666ec39e3fae971dc6f5ecd5a9b01fdefabbebb0f59901 AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.4-bookworm@sha256:ce59b41415e2524ae99926fe1f37ce48ba8c194dcbd2a56a65436cdcefa2bd34 AS build
 WORKDIR /src
 COPY go.mod ./
 COPY cmd ./cmd
