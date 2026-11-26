@@ -44,6 +44,8 @@ jobs:
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
       - name: Security static analysis
         run: go run github.com/securego/gosec/v2/cmd/gosec@v2.30.0 -severity medium -confidence medium ./cmd/... ./internal/...
+      - name: Daily findings issue is created once and then edited
+        run: bash security/test_upsert_issue.sh
   legacy-parity:
     # The original Python server stays the compatibility reference: both servers must pass the same suite.
     runs-on: ubuntu-24.04

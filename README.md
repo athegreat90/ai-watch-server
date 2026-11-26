@@ -8,6 +8,8 @@ agents -> hooks --POST /api/events--> server <--GET /api/status-- watch
 
 Related repositories: [hooks](https://github.com/athegreat90/ai-watch-hooks) | [firmware](https://github.com/athegreat90/ai-watch-firmware). The HTTP API is unchanged from the Python server of v1.1.0, so existing hooks and firmware keep working.
 
+To connect your agents, install the hooks without cloning anything: see [Install without the repository](https://github.com/athegreat90/ai-watch-hooks#install-without-the-repository-recommended) in the hooks README. Point them at this server's URL and token.
+
 ## Quick start (Docker only)
 
 1. Download `ai-watch-deploy-vX.Y.Z.zip` from the [latest release](https://github.com/athegreat90/ai-watch-server/releases) and unzip it.

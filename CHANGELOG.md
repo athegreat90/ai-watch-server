@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Daily remediation keeps a single "Daily container vulnerability findings" issue (the lookup lists open issues instead of using the search API) and de-duplicates the amd64 and arm64 findings. A stubbed test runs in CI.
+
 ## [1.1.4] - 2026-11-24
 
 - The daily remediation workflow authenticates the security GitHub App by Client ID (`SECURITY_APP_CLIENT_ID`) instead of the deprecated App ID input.
